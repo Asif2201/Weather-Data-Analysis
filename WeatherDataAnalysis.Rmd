@@ -2,35 +2,268 @@
 title: "NOAA Weather Data Analysis"
 author: "Asif Khan"
 date: "9/8/2018"
-output: pdf_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library("stringr")
+library("ggplot2")
+library("data.table")
+library("grid")
+library("gridExtra")
 ```
 
-Title:
+# Title
 Data Analysis to show which types of weather events across US are most harmful in terms of population health and which ones have greatest economic consequences
 
-Synopsis:
+# Synopsis
 Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
 
 This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
 
+The analysis invloves summarising the number of fatalities and injuries per event to show the events causing most impact to the population across US. Secondly, analysis summarises the total USD millions cost of damages to property and crops per event type. As the reporters used different names for similar events, all events are summaries in groups for clean reports. Where it was not possible to classify the event its put in within "Others" group.
 
+The findings based on the given dataset indicates that TORNADOES and Thunderstorm Wind has the highest Impact on Population, while Flood and Hurricanes have the highest economic impact.
 
-Data Processing:
-Data used in analysis is from U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage. 
+# Data Processing
+Data used in analysis is from U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage. Data file is downloaded in a compressed CSV format and loaded into a Data Frame.
 
 Downloading and storing data for exploration
 
-```{r datadownload echo = TRUE}
+```{r datadownload,  echo = TRUE}
 download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", cacheOK = TRUE, destfile = "StormData.csv.bz2")
 
 WeatherData <- read.csv("StormData.csv.bz2")
+```
+
+
+Creating Data Sets which will be used further for analysis and reporting by subsetting and summarising on required fields, USD amounts given in PROPDMG and CROPDMG need to be transformed to actual dollars using the fields PROPDMGEXP and CROPDMGEXP which contains K, M or B i.e. the given amount is multiplied by 1000 in case of K, by 1000000 in case of M and by 1000000000 in case of B. The final result is again divided by 1000000 to present the amounts in millions. Event Group field is added and each event is group under 9 groups 
+1. Heat Waves
+2. Cold Waves
+3. Tornadoes
+4. Floods
+5. Lightning
+6. Winter Storms
+7. Hurricanes
+8. Wind Storms
+9. Others
+
+```{r preparingdata, echo = TRUE}
+WeatherDataDT <- data.table(WeatherData)
+WeatherDataDT$EVTYPE <- toupper(WeatherDataDT$EVTYPE)
+
+PopulationImpactDT <- WeatherDataDT[, .(STATE, EVTYPE, FATALITIES, INJURIES)]
+PopulationImpactAggDT <- PopulationImpactDT[,  .(sum(FATALITIES), sum(INJURIES)), by = .(EVTYPE)]
+setnames(PopulationImpactAggDT, c("V1", "V2"), c("FATALITIES", "INJURIES") )
+
+PopulationImpactAggDT[, EVGROUP := ""] 
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HEAT", "Heat Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "DRY", "Heat Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "UNSEASONABLY WARM", "Heat Waves", EVGROUP)]
+
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "SLEET", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WINTRY MIX", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "LOW TEMP", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "COLD", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FREEZ", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WINDCHILL", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FROST", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "GLAZE", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "BLACK ICE", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FOG", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "ICE", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "ICY", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HYPERTHERMIA", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HYPOTHERMIA", "Cold Waves", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WINTER WEATHER", "Cold Waves", EVGROUP)]
+
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "TORNADO", "Tornadoes", EVGROUP)]
+
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FLOODS", "Floods", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "EXCESSIVE RAINFALL", "Floods", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "DROWNING", "Floods", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "URBAN/SML STREAM FLD", "Floods", EVGROUP)]
+
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "LIGHTNING", "Lightning", EVGROUP)]
+
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HAIL", "Winter Storms", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "AVALAN", "Winter Storms", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "BLIZZARD", "Winter Storms", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "SNOW", "Winter Storms", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "STORM" & EVTYPE %like% "WINTER", "Winter Storms", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "ICE STORM", "Winter Storms", EVGROUP)]
+
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HURRI", "Hurricanes", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "RIP", "Hurricanes", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HEAVY", "Hurricanes", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HIGH", "Hurricanes", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "LANDSLIDE", "Hurricanes", EVGROUP)]
+
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "DUST DEVIL", "Wind Storms", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WHIRLWIND", "Wind Storms", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "STORM" & EVGROUP == "", "Wind Storms", EVGROUP)]
+PopulationImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WIND" & EVGROUP == "", "Wind Storms", EVGROUP)]
+
+
+PopulationImpactAggDT[,EVGROUP := ifelse(EVGROUP == "", "Others", EVGROUP)]
+
+EVGROUPAggDT <- PopulationImpactAggDT[,  .(sum(FATALITIES)), by = .(EVGROUP)]
+setnames(EVGROUPAggDT, c("V1"), c("FATALITIES") )
+EVGROUPAggDT$EVGROUP <- str_wrap(EVGROUPAggDT$EVGROUP, width = 10)
+
+
+
+EconomicImpactDT <- WeatherDataDT[, .(STATE, EVTYPE, PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP)]
+EconomicImpactDT[, PROPDMGMULT := ifelse(PROPDMGEXP == "K", 1000, 
+                                         ifelse(PROPDMGEXP == "M", 1000000, 
+                                                ifelse(PROPDMGEXP == "B", 1000000000, 1)))]
+EconomicImpactDT[, PROPDMGABS := PROPDMG * PROPDMGMULT]
+EconomicImpactDT[, CROPDMGMULT := ifelse(CROPDMGEXP == "K", 1000, 
+                                         ifelse(CROPDMGEXP == "M", 1000000, 
+                                                ifelse(CROPDMGEXP == "B", 1000000000, 1)))]
+
+EconomicImpactDT[, CROPDMGABS := CROPDMG * CROPDMGMULT]
+
+EconomicImpactAggDT <- EconomicImpactDT[,  .(sum(PROPDMGABS/1000000), sum(CROPDMGABS/1000000)), by = .(EVTYPE)]
+setnames(EconomicImpactAggDT, c("V1", "V2"), c("PROPDMG", "CROPDMG") )
+EconomicImpactAggDT[, TOTALDMG := PROPDMG+CROPDMG]
+
+EconomicImpactAggDT[, EVGROUP :=""]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HEAT", "Heat Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "DRY", "Heat Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "UNSEASONABLY WARM", "Heat Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "DROUGHT", "Heat Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FIRE", "Heat Waves", EVGROUP)]
+
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "SLEET", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WINTRY MIX", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "LOW TEMP", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "COLD", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FREEZ", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WINDCHILL", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FROST", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "GLAZE", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "BLACK ICE", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FOG", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "ICE", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "ICY", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HYPERTHERMIA", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HYPOTHERMIA", "Cold Waves", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WINTER WEATHER", "Cold Waves", EVGROUP)]
+
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "TORNADO", "Tornadoes", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "TORNDAO", "Tornadoes", EVGROUP)]
+
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FLOODS", "Floods", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FLOOD", "Floods", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "FLOOOD", "Floods", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "RAIN", "Floods", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "DAM", "Floods", EVGROUP)]
+
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "EXCESSIVE RAINFALL", "Floods", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "DROWNING", "Floods", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "URBAN/SML STREAM FLD", "Floods", EVGROUP)]
+
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "LIGHTNING", "Lightning", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "LIGHTING", "Lightning", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "LIGNTNING", "Lightning", EVGROUP)]
+
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HAIL", "Winter Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "AVALAN", "Winter Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "BLIZZARD", "Winter Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "SNOW", "Winter Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "STORM" & EVTYPE %like% "WINTER", "Winter Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "ICE STORM", "Winter Storms", EVGROUP)]
+
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HURRI", "Hurricanes", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "RIP", "Hurricanes", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HEAVY", "Hurricanes", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "HIGH", "Hurricanes", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "LANDSLIDE", "Hurricanes", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "TYPHOON", "Hurricanes", EVGROUP)]
+
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "DUST DEVIL", "Wind Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "GUSTNADO", "Wind Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WHIRLWIND", "Wind Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "TSTMW", "Wind Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "STORM" & EVGROUP == "", "Wind Storms", EVGROUP)]
+EconomicImpactAggDT[,EVGROUP := ifelse(EVTYPE %like% "WIND" & EVGROUP == "", "Wind Storms", EVGROUP)]
+
+
+EconomicImpactAggDT[,EVGROUP := ifelse(EVGROUP == "", "Others", EVGROUP)]
+
+
+EVGROUPAggDT2 <- EconomicImpactAggDT[,  .(sum(TOTALDMG)), by = .(EVGROUP)]
+setnames(EVGROUPAggDT2, c("V1"), c("TOTALDMG") )
+EVGROUPAggDT2$EVGROUP <- str_wrap(EVGROUPAggDT2$EVGROUP, width = 10)
+
+x <- EVGROUPAggDT2[order(-(TOTALDMG)),.SD[1:9]]
+x1 <- x[, c("EVGROUP", "TOTALDMG")]
+x1$TOTALDMG <- round((x1$TOTALDMG/1000),2)
+
+
 
 ```
 
+
+# Results
+
+The impact on Population's due to extreme weather events across United States:
+```{r datapresentation, echo = TRUE, fig.width= 10, fig.height=15}
+NF <- function(x) { return(format(x,big.mark=",",trim=TRUE,scientific=FALSE)) }
+
+t <- textGrob("Estimated deaths from extreme weather events across US")
+
+
+a <- tableGrob(EVGROUPAggDT[order(-(FATALITIES)), lapply(.SD[1:9], NF)])
+
+
+p <- ggplot(EVGROUPAggDT, aes(x = reorder(EVGROUP, -FATALITIES), y = FATALITIES)) +
+    geom_bar(stat="identity", position = position_dodge(), fill = "blue") + 
+    labs(x = "", y = "Total Fatalities", hjust=0.5, title="") +
+    theme(plot.title = element_text(size=18, face="bold", hjust = 0.5, margin = margin(1, 0, 1, 0))) +
+    theme(axis.text.x=element_text( size=10, face = "bold", vjust = 0.5))  +     
+    theme(panel.background = element_rect(fill = 'white'), panel.grid.major.x = element_blank(), panel.grid.major.y = element_line(colour = "grey", size=0.5), panel.grid.minor = element_line(size =0.5,colour = "grey"), panel.border = element_rect(colour = "grey", fill=NA, size=1)) +
+    theme(plot.margin = unit(c(1, 1, 1, 1), "cm")) 
+
+lay <- rbind(c(1,1,1),
+             c(2,2,2),
+             c(2,2,2),
+            c(3,3,3),
+             c(3,3,3),
+             c(3,3,3),
+             c(3,3,3),
+             c(3,3,3))
+grid.arrange(t, a, p, layout_matrix = lay)
+
+```
+The impact on economy due to extreme weather events across United States:
+```{r datapresentation2, echo = TRUE, fig.width= 10, fig.height=15}
+
+t <- textGrob("Estimated billion dollar losses from extreme weather event across US", just = "centre")
+
+a <- tableGrob(x1[order(-(TOTALDMG)), lapply(.SD[1:9], NF)])
+
+p <- ggplot(x1, aes(x = reorder(EVGROUP, -TOTALDMG), y = TOTALDMG)) +
+    geom_bar(stat="identity", position = position_dodge(), fill = "yellow") + 
+    labs(x = "", y = "Damage in billion dollars", hjust=0.5) +
+    theme(plot.title = element_text(size=18, face="bold", hjust = 0.5, margin = margin(1, 0, 1, 0))) +
+    theme(axis.text.x=element_text( size=10, face = "bold", vjust = 0.5))  +     
+    theme(panel.background = element_rect(fill = 'white'), panel.grid.major.x = element_blank(), panel.grid.major.y = element_line(colour = "grey", size=0.5), panel.grid.minor = element_line(size =0.5,colour = "grey"), panel.border = element_rect(colour = "grey", fill=NA, size=1)) +
+    theme(plot.margin = unit(c(1, 1, 1, 1), "cm")) 
+
+lay <- rbind(c(1,1,1),
+             c(2,2,2),
+             c(2,2,2),
+            c(3,3,3),
+             c(3,3,3),
+             c(3,3,3),
+             c(3,3,3),
+             c(3,3,3))
+grid.arrange(t, a, p, layout_matrix = lay)
+
+```
 
 
 
